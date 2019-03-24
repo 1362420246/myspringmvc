@@ -80,7 +80,7 @@ public class DispatcherServlet extends HttpServlet{
         }
 
         for (String className : classNames ) {
-            String cn =className.replace(".class","");
+            String cn = className.replace(".class","");
             Class<?> clazz = null;
             try {
                 clazz = Class.forName(cn);
