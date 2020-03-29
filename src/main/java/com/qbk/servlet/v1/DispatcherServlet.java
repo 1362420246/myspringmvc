@@ -1,4 +1,4 @@
-package com.qbk.servlet;
+package com.qbk.servlet.v1;
 
 import com.qbk.annotation.*;
 
@@ -24,13 +24,13 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Created by 13624 on 2018/8/9.
+ * servlet v1版本
  */
 public class DispatcherServlet extends HttpServlet{
 
-    List<String> classNames = new ArrayList<String>();
-    Map<String,Object> beans = new ConcurrentHashMap<String, Object>();
-    Map<String, Object> handerMap = new HashMap<String, Object>();
+    private List<String> classNames = new ArrayList<String>();
+    private Map<String,Object> beans = new ConcurrentHashMap<>();
+    private Map<String, Object> handerMap = new HashMap<String, Object>();
 
     public DispatcherServlet() {
         super();
@@ -39,8 +39,6 @@ public class DispatcherServlet extends HttpServlet{
 
     @Override
     public void init(ServletConfig config) throws ServletException {
-        //super.init(config);
-
         //扫描bean
         scanPackage("com.qbk");
         //实例化bean
@@ -68,8 +66,6 @@ public class DispatcherServlet extends HttpServlet{
                 classNames.add(basePackage+"."+filePath.getName());
             }
         }
-        
-        
     }
 
     //实例化bean
@@ -85,30 +81,24 @@ public class DispatcherServlet extends HttpServlet{
             try {
                 clazz = Class.forName(cn);
                 //判断此类是否使用了 某个注解
-                if (clazz.isAnnotationPresent(QBKController.class)){//controller
-
+                if (clazz.isAnnotationPresent(QBKController.class)){
+                    //controller
                     Object instance = clazz.newInstance();
 
                     QBKRequestMapping requestMapping = clazz.getAnnotation(QBKRequestMapping.class);
                     String rmValue = requestMapping.value();
 
                     beans.put(rmValue , instance) ;
-                }else if (clazz.isAnnotationPresent(QBKService.class)){//service
-
+                }else if (clazz.isAnnotationPresent(QBKService.class)){
+                    //service
                     Object instance = clazz.newInstance();
 
                     QBKService service = clazz.getAnnotation(QBKService.class);
                     String serviceName = service.value();
-
-                    beans.put( serviceName, instance) ;//MyServiceImpl
-                }else {
-                    continue;
+                    //MyServiceImpl
+                    beans.put( serviceName, instance) ;
                 }
-            } catch (ClassNotFoundException e) {
-                e.printStackTrace();
-            } catch (IllegalAccessException e) {
-                e.printStackTrace();
-            } catch (InstantiationException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
 
@@ -122,21 +112,18 @@ public class DispatcherServlet extends HttpServlet{
             return;
         }
         for (Map.Entry<String,Object> entry: beans.entrySet()){
-
             Object instance = entry.getValue();
             Class<?> clazz = instance.getClass();
-
             if (clazz.isAnnotationPresent(QBKController.class)){
-
                 Field[] fields = clazz.getDeclaredFields();
-
                 for (Field field :fields){
                     //判断此字段是否使用了 某个注解
                     if (field.isAnnotationPresent(QBKAutowired.class)){
                         //拿到注解
                         QBKAutowired annotation = field.getAnnotation(QBKAutowired.class);
                         //拿到注解 写的值
-                        String serviceName = annotation.value();//MyServiceImpl
+                        //MyServiceImpl
+                        String serviceName = annotation.value();
                         //可访问私有属性
                         field.setAccessible(true);
                         try {
@@ -146,12 +133,8 @@ public class DispatcherServlet extends HttpServlet{
                             e.printStackTrace();
                         }
 
-                    }else {
-                        continue;
                     }
                 }
-            }else {
-                continue;
             }
         }
     }
@@ -178,12 +161,8 @@ public class DispatcherServlet extends HttpServlet{
                        //方法上路径
                        String methodPath = methodMapping.value();
                        handerMap.put(classPath + methodPath, method);
-                   } else {
-                       continue;
                    }
                }
-           } else {
-               continue;
            }
        }
    }
@@ -196,8 +175,6 @@ public class DispatcherServlet extends HttpServlet{
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-
-
         String url = req.getRequestURI();
         String context = req.getContextPath();
         String path = url.replace(context, "");
@@ -211,9 +188,7 @@ public class DispatcherServlet extends HttpServlet{
         Object[] args =hand(req,resp,method);
         try {
             Object invoke = method.invoke(controller, args);
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        } catch (InvocationTargetException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
