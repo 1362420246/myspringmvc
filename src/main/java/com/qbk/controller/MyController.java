@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 
 @QBKController
-@QBKRequestMapping("qbk")
+@QBKRequestMapping("/qbk")
 public class MyController {
 
     //@QBKAutowired("myService")
