@@ -59,11 +59,14 @@ public class QBKBeanDefinitionReader {
     }
     /**
      * 2、扫描配置文件中的配置的相关的类
+     * 递归
      */
     private void doScanner(String scanPackage) {
         //转换为文件路径，实际上就是把.替换为/
         URL url = this.getClass().getClassLoader().getResource(
                 "/" + scanPackage.replaceAll("\\.","/"));
+
+        //扫描的根路径
         File classPath = new File(url.getFile());
 
         //当成是一个ClassPath文件夹
@@ -86,12 +89,14 @@ public class QBKBeanDefinitionReader {
     }
 
     /**
-     * 3、解析配置文件，封装成BeanDefinition
+     *  解析配置文件，封装成BeanDefinition
      */
     public List<QBKBeanDefinition> loadBeanDefinitions() {
         List<QBKBeanDefinition> result = new ArrayList<>();
         try {
             for (String className : regitryBeanClasses) {
+
+                //全类名反射
                 Class<?> beanClass = Class.forName(className);
 
                 //如果是一个接口，是不能实例化的。用它实现类来实例化
@@ -128,6 +133,16 @@ public class QBKBeanDefinitionReader {
         return beanDefinition;
     }
 
+    /**
+     * 获取配置
+     */
+    public Properties getContextConfig() {
+        return contextConfig;
+    }
+
+    /**
+     * 首字母小写
+     */
     private String toLowerFirstCase(String simpleName) {
         char [] chars = simpleName.toCharArray();
         chars[0] += 32;

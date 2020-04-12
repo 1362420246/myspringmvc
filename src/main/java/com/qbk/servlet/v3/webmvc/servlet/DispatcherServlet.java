@@ -18,6 +18,8 @@ import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * servlet v3版本
@@ -26,61 +28,121 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class DispatcherServlet extends HttpServlet{
 
-    private QBKApplicationContext applicationContext;
-
-    /**
-     * 保存Contrller中所有Mapping的对应关系
-     */
-    private Map<String, Method> handlerMapping = new HashMap<>();
-
     public DispatcherServlet() {
         super();
         System.out.println("servlet init");
     }
 
+    /**
+     * ApplicationContext
+     */
+    private QBKApplicationContext applicationContext;
+
+    /**
+     * 保存Contrller中所有Mapping的对应关系
+     */
+    private List<QBKHandlerMapping> handlerMappings = new ArrayList<>();
+
+    /**
+     * HandlerMapping 和 HandlerAdapter 的关联
+     */
+    private Map<QBKHandlerMapping,QBKHandlerAdapter> handlerAdapters = new HashMap<>();
+
+    /**
+     * 保存试图解析器
+     */
+    private List<QBKViewResolver> viewResolvers = new ArrayList<>();
+
     @Override
     public void init(ServletConfig config) throws ServletException {
         //初始化Spring核心IoC容器
+        //完成了IoC、DI
         applicationContext = new QBKApplicationContext(config.getInitParameter("contextConfigLocation"));
 
-        //=============MVC部分================
-        //5.初始化HandlerMapping
-        doInitHandlerMapping();
+        //初始化mvc 九大组件
+        initStrategies(applicationContext);
     }
 
+    /**
+     * 初始化九大组件
+     */
+    private void initStrategies(QBKApplicationContext context) {
+//        //多文件上传的组件
+//        initMultipartResolver(context);
+//        //初始化本地语言环境
+//        initLocaleResolver(context);
+//        //初始化模板处理器
+//        initThemeResolver(context);
+        //初始化处理器映射器
+        initHandlerMappings(context);
+        //初始化参数适配器
+        initHandlerAdapters(context);
+//        //初始化异常拦截器
+//        initHandlerExceptionResolvers(context);
+//        //初始化视图预处理器
+//        initRequestToViewNameTranslator(context);
+        //初始化视图转换器
+        initViewResolvers(context);
+//        //FlashMap管理器
+//        initFlashMapManager(context);
+    }
 
     /**
-     * 5.初始化HandlerMapping
+     * 初始化HandlerMapping
      */
-   private void doInitHandlerMapping(){
-       Map<String, QBKBeanWrapper> factoryBeanInstanceCache = applicationContext.getFactoryBeanInstanceCache();
-       if(factoryBeanInstanceCache.isEmpty()){
-           return;
-       }
-       for (Map.Entry<String, QBKBeanWrapper> entry : factoryBeanInstanceCache.entrySet()) {
-           Object instance =  entry.getValue().getWrapperInstance();
-           Class<?> clazz = instance.getClass();
-           if (clazz.isAnnotationPresent(QBKController.class)) {
-               QBKRequestMapping requestMapping = clazz.getAnnotation(QBKRequestMapping.class);
-               //类上路径
-               String baseUrl = requestMapping.value();
-               //获取Method的url配置
-               Method[] methods = clazz.getMethods();
-               for (Method method : methods) {
-                   //有没有加RequestMapping注解
-                   if (method.isAnnotationPresent(QBKRequestMapping.class)) {
-                       //映射URL
-                       QBKRequestMapping methodMapping =  method.getAnnotation(QBKRequestMapping.class);
-                       //方法上路径
-                       String methodPath = methodMapping.value();
-                       String url = ("/" + baseUrl + "/" + methodPath)
-                               .replaceAll("/+", "/");
-                       handlerMapping.put(url, method);
-                   }
-               }
-           }
-       }
-   }
+    private void initHandlerMappings(QBKApplicationContext context) {
+        if(this.applicationContext.getBeanDefinitionCount() == 0){
+            return;
+        }
+        for (String beanName : this.applicationContext.getBeanDefinitionNames()) {
+            Object instance = applicationContext.getBean(beanName);
+            Class<?> clazz = instance.getClass();
+            //只处理controller
+            if (clazz.isAnnotationPresent(QBKController.class)) {
+                //提取 class上配置的url
+                String baseUrl = "";
+                //有没有加RequestMapping注解
+                if(clazz.isAnnotationPresent(QBKRequestMapping.class)){
+                    QBKRequestMapping requestMapping = clazz.getAnnotation(QBKRequestMapping.class);
+                    baseUrl = requestMapping.value();
+                }
+                //获取Method的url配置
+                Method[] methods = clazz.getMethods();
+                for (Method method : methods) {
+                    //有没有加RequestMapping注解
+                    if(!method.isAnnotationPresent(QBKRequestMapping.class)){
+                        continue;
+                    }
+                    //提取每个方法上面配置的url
+                    QBKRequestMapping requestMapping =  method.getAnnotation(QBKRequestMapping.class);
+                    //路径
+                    String regex = ("/" + baseUrl + "/" +
+                            requestMapping.value().replaceAll("\\*",".*"))
+                            .replaceAll("/+","/");
+                    Pattern pattern = Pattern.compile(regex);
+                    handlerMappings.add(new QBKHandlerMapping(pattern,instance,method));
+                }
+            }
+        }
+    }
+
+    /**
+     * 初始化参数适配器
+     */
+    private void initHandlerAdapters(QBKApplicationContext context) {
+        for (QBKHandlerMapping handlerMapping : handlerMappings) {
+            this.handlerAdapters.put(handlerMapping,new QBKHandlerAdapter());
+        }
+    }
+
+    /**
+     * 初始化视图转换器
+     */
+    private void initViewResolvers(QBKApplicationContext context) {
+        //读取模板根路径配置
+        String templateRoot = context.getConfig().getProperty("templateRoot");
+        this.viewResolvers.add(new QBKViewResolver(templateRoot));
+    }
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -89,7 +151,7 @@ public class DispatcherServlet extends HttpServlet{
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        //6.委派，根据url ，找到对应的  method，然后执行
+        //委派，根据url ，找到对应的  method，然后执行
         try {
             doDispatch(req,resp);
         } catch (Exception e) {
@@ -97,61 +159,83 @@ public class DispatcherServlet extends HttpServlet{
         }
     }
 
+    /**
+     * 委派，根据url ，找到对应的  method，然后执行
+     */
     private void doDispatch(HttpServletRequest req, HttpServletResponse resp)throws Exception {
-        String url = req.getRequestURI();
-        String contextPath = req.getContextPath();
-        url = url.replaceAll(contextPath,"").replaceAll("/+","/");
-        if(!this.handlerMapping.containsKey(url)){
-            resp.getWriter().write("404 Not Found!!");
+        //完成了对HandlerMapping的封装
+        //完成了对方法返回值的封装ModelAndView
+
+        //1、通过URL获得一个HandlerMapping
+        QBKHandlerMapping handler = this.getHandler(req);
+        if(handler == null){
+            processDispatchResult(resp,new QBKModelAndView("404"));
             return;
         }
-        Method method = this.handlerMapping.get(url);
 
-        //request 里面的参数
-        Map<String,String[]> params = req.getParameterMap();
-        //获取方法的形参列表
-        Class<?> [] parameterTypes = method.getParameterTypes();
-        //保存赋值参数的列表
-        Object [] paramValues = new Object[parameterTypes.length];
-        //按根据参数位置动态赋值
-        for (int i = 0; i < parameterTypes.length; i ++){
-            Class parameterType = parameterTypes[i];
-            if(parameterType == HttpServletRequest.class){
-                paramValues[i] = req;
-            }else if(parameterType == HttpServletResponse.class){
-                paramValues[i] = resp;
-            }else if(parameterType == String.class){
-                //提取方法中加了注解的参数
-                Annotation[] [] pa = method.getParameterAnnotations();
-                for (int j = 0; j < pa.length ; j ++) {
-                    for(Annotation a : pa[i]){
-                        if(a instanceof QBKRequestParam){
-                            String paramName = ((QBKRequestParam) a).value();
-                            if(!"".equals(paramName.trim())){
-                                String value = Arrays.toString(params.get(paramName))
-                                        .replaceAll("\\[|\\]","")
-                                        .replaceAll("\\s",",");
-                                paramValues[i] = value;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        //暂时硬编码
-        String beanName = toLowerFirstCase(method.getDeclaringClass().getSimpleName());
-        //赋值实参列表
-        Map<String, QBKBeanWrapper> factoryBeanInstanceCache = applicationContext.getFactoryBeanInstanceCache();
-        method.invoke(factoryBeanInstanceCache.get(beanName).getWrapperInstance(),paramValues);
+        //2、根据一个HandlerMaping获得一个HandlerAdapter
+        QBKHandlerAdapter ha = getHandlerAdapter(handler);
+
+        //3、解析某一个方法的形参和返回值之后，统一封装为ModelAndView对象
+        QBKModelAndView mv = ha.handler(req,resp,handler);
+
+        // 就把ModelAndView变成一个ViewResolver
+        processDispatchResult(resp,mv);
+
     }
 
     /**
-     * 首字母变小写
+     * 获取 handlerMaping
      */
-    private String toLowerFirstCase(String simpleName) {
-        char [] chars = simpleName.toCharArray();
-        chars[0] += 32;
-        return  String.valueOf(chars);
+    private QBKHandlerMapping getHandler(HttpServletRequest req) {
+        if(this.handlerMappings.isEmpty()){
+            return  null;
+        }
+        String url = req.getRequestURI();
+        String contextPath = req.getContextPath();
+        url = url.replaceAll(contextPath,"").replaceAll("/+","/");
+        for (QBKHandlerMapping mapping : handlerMappings) {
+            //url 正则匹配
+            Matcher matcher = mapping.getPattern().matcher(url);
+            if(!matcher.matches()){
+                continue;
+            }
+            return mapping;
+        }
+        return null;
+    }
+
+    /**
+     * 获取 QBKHandlerAdapter
+     */
+    private QBKHandlerAdapter getHandlerAdapter(QBKHandlerMapping handler) {
+        if(this.handlerAdapters.isEmpty()){
+            return null;
+        }
+        return this.handlerAdapters.get(handler);
+    }
+
+    /**
+     * 输出结果
+     * 把ModelAndView变成一个ViewResolver
+     * 从ViewResolver解析处 view
+     * view 显然页面
+     */
+    private void processDispatchResult( HttpServletResponse resp, QBKModelAndView mv) throws Exception {
+        if(null == mv){
+            return;
+        }
+        if(this.viewResolvers.isEmpty()){
+            return;
+        }
+
+        for (QBKViewResolver viewResolver : this.viewResolvers) {
+            //试图解析
+            QBKView view = viewResolver.resolveViewName(mv.getViewName());
+            //直接往浏览器输出
+            view.render(mv.getModel(),resp);
+            return;
+        }
     }
 
 }

@@ -11,6 +11,9 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.PrintWriter;
 
+/**
+ * v1 v2 测试
+ */
 @QBKController
 @QBKRequestMapping("/qbk")
 public class MyController {

@@ -7,6 +7,12 @@ import lombok.Data;
  */
 @Data
 public class QBKBeanDefinition {
+    /**
+     * bean name
+     */
     private String factoryBeanName;
+    /**
+     * class name
+     */
     private String beanClassName;
 }

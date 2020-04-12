@@ -11,7 +11,9 @@ import lombok.Data;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.LogManager;
 
 /**
  * 职责：完成Bean的创建和DI
@@ -36,6 +38,9 @@ public class QBKApplicationContext {
      */
     private Map<String,Object> factoryBeanObjectCache = new ConcurrentHashMap<>();
 
+    /**
+     * 初始化IoC容器
+     */
     public QBKApplicationContext(String... configLocations) {
         //1、加载配置文件
         reader = new QBKBeanDefinitionReader(configLocations);
@@ -59,11 +64,14 @@ public class QBKApplicationContext {
             if(this.beanDefinitionMap.containsKey(beanDefinition.getFactoryBeanName())){
                 throw new Exception("The " + beanDefinition.getFactoryBeanName() + "is exists");
             }
+            // 首字母小写 或 自定义
             beanDefinitionMap.put(beanDefinition.getFactoryBeanName(),beanDefinition);
+            //类型名
             beanDefinitionMap.put(beanDefinition.getBeanClassName(),beanDefinition);
         }
     }
     /**
+     * 初始化bean
      * 调用getBean()
      */
     private void doAutowrited() {
@@ -101,9 +109,15 @@ public class QBKApplicationContext {
         String className = beanDefinition.getBeanClassName();
         Object instance = null;
         try {
-            Class<?> clazz = Class.forName(className);
-            instance = clazz.newInstance();
-            this.factoryBeanObjectCache.put(beanName, instance);
+            if(this.factoryBeanObjectCache.containsKey(beanName)){
+                //有就获取
+                instance = this.factoryBeanObjectCache.get(beanName);
+            }else {
+                //没有反射创建
+                Class<?> clazz = Class.forName(className);
+                instance = clazz.newInstance();
+                this.factoryBeanObjectCache.put(beanName, instance);
+            }
         }catch (Exception e){
             e.printStackTrace();
         }
@@ -111,6 +125,7 @@ public class QBKApplicationContext {
     }
 
     /**
+     * DI
      * 依赖注入
      */
     private void populateBean(String beanName, QBKBeanDefinition beanDefinition, QBKBeanWrapper beanWrapper) {
@@ -162,5 +177,20 @@ public class QBKApplicationContext {
 
     public Object getBean(Class beanClass){
         return getBean(beanClass.getName());
+    }
+
+    public int getBeanDefinitionCount() {
+        return this.beanDefinitionMap.size();
+    }
+
+    public String[] getBeanDefinitionNames() {
+        return this.beanDefinitionMap.keySet().toArray(new String[this.beanDefinitionMap.size()]);
+    }
+
+    /**
+     * 获取配置
+     */
+    public Properties getConfig() {
+        return this.reader.getContextConfig();
     }
 }
