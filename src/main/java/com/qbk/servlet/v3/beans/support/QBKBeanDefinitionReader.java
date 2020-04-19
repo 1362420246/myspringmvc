@@ -148,4 +148,5 @@ public class QBKBeanDefinitionReader {
         chars[0] += 32;
         return String.valueOf(chars);
     }
+
 }

@@ -19,6 +19,7 @@ public class MyServiceImpl implements MyService{
     public String query(String name) {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         String time = sdf.format(new Date());
+        System.out.println(name);
         return "{name:\"" + name + "\",time:\"" + time + "\"}";
     }
 }

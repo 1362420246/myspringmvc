@@ -3,6 +3,9 @@ package com.qbk.servlet.v3.context;
 import com.qbk.annotation.QBKAutowired;
 import com.qbk.annotation.QBKController;
 import com.qbk.annotation.QBKService;
+import com.qbk.servlet.v3.aop.QBKJdkDynamicAopProxy;
+import com.qbk.servlet.v3.aop.config.AopConfig;
+import com.qbk.servlet.v3.aop.support.QBKAdvisedSupport;
 import com.qbk.servlet.v3.beans.QBKBeanWrapper;
 import com.qbk.servlet.v3.beans.config.QBKBeanDefinition;
 import com.qbk.servlet.v3.beans.support.QBKBeanDefinitionReader;
@@ -116,12 +119,43 @@ public class QBKApplicationContext {
                 //没有反射创建
                 Class<?> clazz = Class.forName(className);
                 instance = clazz.newInstance();
+
+                //==================AOP开始=========================
+                //如果满足条件，就直接返回Proxy对象
+                //加载AOP的配置文件
+                QBKAdvisedSupport support = instantionAopConfig(beanDefinition);
+                support.setTargetClass(clazz);
+                support.setTarget(instance);
+
+                //判断规则，要不要生成代理类，如果要就覆盖原生对象
+                //如果不要就不做任何处理，返回原生对象
+                if(support.pointCutMath()){
+                    //把Support注入代理 并获取代理  替换原生bean
+                    instance = new QBKJdkDynamicAopProxy(support).getProxy();
+                }
+                //===================AOP结束========================
+
                 this.factoryBeanObjectCache.put(beanName, instance);
             }
         }catch (Exception e){
             e.printStackTrace();
         }
         return instance;
+    }
+
+    /**
+     * 加载aop配置文件
+     * 保存到 Support 中
+     */
+    private QBKAdvisedSupport instantionAopConfig(QBKBeanDefinition beanDefinition) {
+        AopConfig config = new AopConfig();
+        config.setPointCut(this.reader.getContextConfig().getProperty("pointCut"));
+        config.setAspectClass(this.reader.getContextConfig().getProperty("aspectClass"));
+        config.setAspectBefore(this.reader.getContextConfig().getProperty("aspectBefore"));
+        config.setAspectAfter(this.reader.getContextConfig().getProperty("aspectAfter"));
+        config.setAspectAfterThrow(this.reader.getContextConfig().getProperty("aspectAfterThrow"));
+        config.setAspectAfterThrowingName(this.reader.getContextConfig().getProperty("aspectAfterThrowingName"));
+        return new QBKAdvisedSupport(config);
     }
 
     /**
